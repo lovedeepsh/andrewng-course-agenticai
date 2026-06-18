@@ -1,1 +1,8 @@
 .env
+
+# Jupyter
+__pycache__/
+*.py[cod]
+
+# Jupyter
+.ipynb_checkpoints/
