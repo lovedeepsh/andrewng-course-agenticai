@@ -135,7 +135,7 @@ def load_and_prepare_data(file_path: str):
     df = df.assign(year=df["date"].dt.year)
     #pd.DataFrame
     return df
-
+import mimetypes
 def encode_image_b64(path: str) -> tuple[str, str]:
     """Return (media_type, base64_str) for an image file path."""
     mime, _ = mimetypes.guess_type(path)
