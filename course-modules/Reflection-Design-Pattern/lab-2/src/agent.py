@@ -1,4 +1,4 @@
-"""Builds the SQL-reflection agent: model, tools, and system prompt."""
+"""Builds the SQL-reflection agent."""
 
 from langchain.agents import create_agent
 from langchain.chat_models import init_chat_model
@@ -6,28 +6,35 @@ from langgraph.checkpoint.memory import InMemorySaver
 
 from . import config
 from .db import get_schema
-from .tools import make_sql_tools
+from .state import DbContext, SqlState
+from .tools import run_sql
 
 SYSTEM_PROMPT = """\
-You are a senior data analyst. You answer questions in two steps: first write a
-SQL query, then reflect on the query and its result and produce a better one.
-Call your tools in order. Do not ask the user questions.
+You are a senior data analyst. Answer the question by writing a SQLite SELECT
+query and calling run_sql to execute it.
+
+Work in two steps:
+1. Write a first query and run it with run_sql.
+2. Look at the rows it returned. If the result is wrong, empty, or could be more
+   correct or clearer, refine the query and run it again.
+
+Table schema:
+{schema}
+
+When you are satisfied, reply with the final SQL and a one-line summary of the
+result. Do not ask the user questions.
 """
 
 
 def build_agent():
-    """Assemble and return the SQL-reflection agent.
-
-    Note: no ``df`` argument here (unlike lab-1) — this lab reads from the DB,
-    and the schema is fetched from the DB at build time.
-    """
     schema = get_schema(str(config.DB_PATH))
-    v1_tool, v2_tool = make_sql_tools(
-        schema=schema, instruction=config.INSTRUCTION,
-        model_name=config.MODEL_NAME, db_path=str(config.DB_PATH),
-    )
     model = init_chat_model(f"openai:{config.MODEL_NAME}", temperature=config.TEMPERATURE)
     return create_agent(
-        model=model, tools=[v1_tool, v2_tool],
-        system_prompt=SYSTEM_PROMPT, checkpointer=InMemorySaver(),
+        model=model,
+        tools=[run_sql],
+        system_prompt=SYSTEM_PROMPT.format(schema=schema),
+        state_schema=SqlState,
+        context_schema=DbContext,
+        checkpointer=InMemorySaver(),
     )
+

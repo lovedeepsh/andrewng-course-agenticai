@@ -14,7 +14,6 @@ CHART_V2_PATH = OUTPUT_DIR / "chart_v2.png"
 MODEL_NAME = "gpt-4.1-mini"
 TEMPERATURE = 0
 
-# The chart the user wants (fixed for this lab).
 INSTRUCTION = "Create a plot comparing Q1 coffee sales in 2024 and 2025."
 
 SCHEMA = """

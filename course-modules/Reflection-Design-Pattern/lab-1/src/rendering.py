@@ -1,36 +1,17 @@
-from IPython.display import display, HTML
-import html
-import pandas as pd
+"""Display helpers for rendering DataFrames, images, and text inside a styled card."""
+
 import base64
+import html
+import mimetypes
 from typing import Any
 
-# def print_html(df, title=None, border=0, max_rows=None, index=False):
-#     html_table = df.to_html(
-#     border=border,
-#     max_rows=max_rows,
-#     index=index
-#     )
+import pandas as pd
+from IPython.display import HTML, display
 
-#     html_table = html_table.replace(
-#         '<table border="1" class="dataframe">',
-#         '<table border="1" class="dataframe" style="border-collapse: collapse;">'
-#     ).replace(
-#         '<th>',
-#         '<th style="border: 1px solid black; padding: 6px;">'
-#     ).replace(
-#         '<td>',
-#         '<td style="border: 1px solid black; padding: 6px;">'
-#     )
-#     heading = HTML(f"<h3>{title}</h3>")
-#     if title is not None:
-#         display(heading)
-#     #return display(HTML(html_table))
-#     display(HTML(html_table))
 
-## My code is too basic, using course utils.py code
 def print_html(content: Any, title: str | None = None, is_image: bool = False):
-    """
-    Pretty-print inside a styled card.
+    """Pretty-print inside a styled card.
+
     - If is_image=True and content is a string: treat as image path/URL and render <img>.
     - If content is a pandas DataFrame/Series: render as an HTML table.
     - Otherwise (strings/others): show as code/text in <pre><code>.
@@ -44,7 +25,6 @@ def print_html(content: Any, title: str | None = None, is_image: bool = False):
         with open(image_path, "rb") as img_file:
             return base64.b64encode(img_file.read()).decode("utf-8")
 
-    # Render content
     if is_image and isinstance(content, str):
         b64 = image_to_base64(content)
         rendered = f'<img src="data:image/png;base64,{b64}" alt="Image" style="max-width:100%; height:auto; border-radius:8px;">'
@@ -76,8 +56,7 @@ def print_html(content: Any, title: str | None = None, is_image: bool = False):
       font-size:14px;
       color:#111;
     }
-    /* 🔒 Only affects INSIDE the card */
-    .pretty-card pre, 
+    .pretty-card pre,
     .pretty-card code {
       background: #f3f4f6;
       color: #111;
@@ -95,7 +74,7 @@ def print_html(content: Any, title: str | None = None, is_image: bool = False):
       font-size: 13px;
       color: #111;
     }
-    .pretty-card table.pretty-table th, 
+    .pretty-card table.pretty-table th,
     .pretty-card table.pretty-table td {
       border: 1px solid #e5e7eb;
       padding: 6px 8px;
@@ -109,12 +88,13 @@ def print_html(content: Any, title: str | None = None, is_image: bool = False):
     card = f'<div class="pretty-card">{title_html}{rendered}</div>'
     display(HTML(css + card))
 
-def print_code_html(code: str, title=None):
+
+def print_code_html(code: str, title: str | None = None):
+    """Render a code string in a framed monospace block."""
     if title is not None:
         display(HTML(f"<h3>{html.escape(title)}</h3>"))
 
     escaped_code = html.escape(code)
-
     display(HTML(f"""
     <pre style="
         border: 1px solid black;
@@ -126,16 +106,20 @@ def print_code_html(code: str, title=None):
     ">{escaped_code}</pre>
     """))
 
-def load_and_prepare_data(file_path: str):
+
+def load_and_prepare_data(file_path: str) -> pd.DataFrame:
+    """Load the coffee sales CSV and derive quarter, month, and year columns."""
     df = pd.read_csv(file_path)
     df["date"] = pd.to_datetime(df["date"])
     df["price"] = pd.to_numeric(df["price"])
-    df = df.assign(quarter=df["date"].dt.quarter)
-    df = df.assign(month=df["date"].dt.month)
-    df = df.assign(year=df["date"].dt.year)
-    #pd.DataFrame
+    df = df.assign(
+        quarter=df["date"].dt.quarter,
+        month=df["date"].dt.month,
+        year=df["date"].dt.year,
+    )
     return df
-import mimetypes
+
+
 def encode_image_b64(path: str) -> tuple[str, str]:
     """Return (media_type, base64_str) for an image file path."""
     mime, _ = mimetypes.guess_type(path)

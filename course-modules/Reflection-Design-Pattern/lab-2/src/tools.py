@@ -1,80 +1,29 @@
 """Tools for the SQL-reflection agent."""
 
-from langchain_core.tools import tool
-from langchain_openai import ChatOpenAI
+from langchain.messages import ToolMessage
+from langchain.tools import ToolRuntime, tool
+from langgraph.types import Command
 
-from . import config
 from .db import execute_sql
-from .schemas import SqlQuery, SqlReflection
+from .state import DbContext, SqlState
 
 
-def make_sql_tools(
-    schema: str,
-    instruction: str,
-    model_name: str,
-    db_path: str,
-):
-    """Create the SQL-generation and SQL-reflection tools.
+@tool
+def run_sql(query: str, runtime: ToolRuntime[DbContext, SqlState]) -> Command:
+    """Run a read-only SQLite SELECT and return the resulting rows (or the error).
 
-    Config (schema, question, model, db path) is captured in the closure so the
-    tools take no arguments. The shared ``ctx`` dict passes the first query and
-    its result from the generation step to the reflection step.
-
-    Returns:
-        A ``(generate_sql_v1, reflect_and_regenerate_sql)`` tuple.
+    Args:
+        query: A single SQLite SELECT statement.
     """
-    ctx: dict = {}
+    db_path = runtime.context.db_path
+    df = execute_sql(query, db_path)
+    attempts = runtime.state.get("attempts", 0) + 1
+    return Command(
+        update={
+            "attempts": attempts,
+            "messages": [
+                ToolMessage(content=df.to_string(index=False), tool_call_id=runtime.tool_call_id)
+            ],
+        }
+    )
 
-    @tool
-    def generate_sql_v1() -> str:
-        """Write the first SQL query for the question and run it."""
-        prompt = f"""
-        You are a senior data analyst. 
-        Your task: I will share you a question and dataset schema.
-        Based on the question and dataset schema, write a SQLite SELECT query to answer the question.
-        Do not explain anything.
-
-        Dataset schema:
-        {schema}
-
-        User instructions:
-        {instruction}
-        """
-        llm = ChatOpenAI(model=model_name, temperature=config.TEMPERATURE)
-        result = llm.with_structured_output(SqlQuery).invoke(prompt)
-        df = execute_sql(result.sql, db_path)
-        ctx["sql_v1"] = result.sql
-        ctx["result_v1"] = df
-        return result.sql
-
-    @tool
-    def reflect_and_regenerate_sql() -> str:
-        """Critique the first query and its result, then produce an improved query."""
-        sql_v1 = ctx.get("sql_v1", "")
-        result_v1 = ctx.get("result_v1")
-        result_preview = result_v1.to_string() if result_v1 is not None else "(no result available)"
-        prompt = f"""
-        You are a senior data analyst.
-        Your task: I will share you a question, dataset schema, SQLite SELECT query and its result.
-        Analyze the query and its result from correctness, efficiency and readability perspective.
-        Then gather your feedback and re-create a new query for me.
-        Do not explain anything.
-        
-        Dataset schema:
-        {schema}
-
-        Question to answer:
-        {instruction}
-
-        SQLite SELECT query:
-        {sql_v1}
-
-        Result preview:
-        {result_preview}
-        """
-        llm = ChatOpenAI(model=model_name, temperature=config.TEMPERATURE)
-        result = llm.with_structured_output(SqlReflection).invoke(prompt)
-        df = execute_sql(result.sql, db_path)
-        return f"Feedback:\n{result.feedback}\n\nImproved SQL:\n{result.sql}"
-
-    return generate_sql_v1, reflect_and_regenerate_sql
